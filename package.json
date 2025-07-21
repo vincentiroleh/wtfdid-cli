@@ -1,0 +1,25 @@
+{
+  "name": "wtfdid-cli",
+  "version": "1.0.0",
+  "description": "A hilarious but genuinely useful CLI that tells devs WTF they did today",
+  "main": "bin/wtfdid.js",
+  "bin": {
+    "wtfdid": "./bin/wtfdid.js"
+  },
+  "scripts": {
+    "start": "node bin/wtfdid.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["cli", "productivity", "git", "developer", "daily-summary", "aws-q-developer"],
+  "author": "Vincent",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^11.1.0",
+    "simple-git": "^3.20.0",
+    "chalk": "^4.1.2",
+    "ora": "^5.4.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
