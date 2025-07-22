@@ -7,11 +7,11 @@ class AISummarizer {
     this.qConfigPath = path.join(process.cwd(), 'q-agent-config.json');
   }
 
-  async generateSummary(commits, files, events, streakData, targetDate) {
+  async generateSummary(commits, files, events, appCategories, streakData, targetDate) {
     // Create Q Developer agent config if it doesn't exist
     await this.ensureQConfig();
     
-    const prompt = this.buildPrompt(commits, files, events, streakData, targetDate);
+    const prompt = this.buildPrompt(commits, files, events, appCategories, streakData, targetDate);
     
     try {
       // Try Q Developer CLI first
@@ -20,14 +20,15 @@ class AISummarizer {
     } catch (error) {
       console.warn('Q Developer failed, using fallback summary:', error.message);
       // Generate a simple fallback summary
-      return this.generateFallbackSummary(commits, files, events, streakData, targetDate);
+      return this.generateFallbackSummary(commits, files, events, appCategories, streakData, targetDate);
     }
   }
 
-  buildPrompt(commits, files, events, streakData, targetDate) {
+  buildPrompt(commits, files, events, appCategories, streakData, targetDate) {
     const dateStr = targetDate.toLocaleDateString();
     const fileStats = this.getFileStats(files);
     const calendarStats = this.formatCalendarEvents(events);
+    const appStats = this.formatAppsForPrompt(appCategories);
     const streakStats = this.formatStreakData(streakData);
     
     return `You're a witty but professional productivity assistant. Given the user's commits, files, calendar events, productivity streak, and activities, summarize their day in a fun and human way.
@@ -48,10 +49,13 @@ ${files.slice(0, 10).map(f => `- ${f.path} (${f.extension})`).join('\n')}
 Calendar Events:
 ${calendarStats}
 
+Applications Used:
+${appStats}
+
 Productivity Streak:
 ${streakStats}
 
-Generate a fun, encouraging daily summary that makes the developer feel good about their work, acknowledges their streak, and celebrates both their coding AND meeting accomplishments!`;
+Generate a fun, encouraging daily summary that makes the developer feel good about their work, acknowledges their streak, and celebrates their coding, meetings, AND the tools they used to get stuff done!`;
   }
 
   async callQDeveloper(prompt) {
@@ -216,7 +220,39 @@ Generate a fun, encouraging daily summary that makes the developer feel good abo
     return formatted;
   }
 
-  generateFallbackSummary(commits, files, events, streakData, targetDate) {
+  formatAppsForPrompt(appCategories) {
+    if (!appCategories || Object.keys(appCategories).length === 0) {
+      return 'No app usage data available.';
+    }
+
+    const totalApps = Object.values(appCategories).flat().length;
+    if (totalApps === 0) {
+      return 'No applications tracked today.';
+    }
+
+    let formatted = `${totalApps} applications used across categories:\n`;
+    
+    Object.entries(appCategories).forEach(([category, apps]) => {
+      if (apps.length > 0) {
+        formatted += `\n${category.charAt(0).toUpperCase() + category.slice(1)} (${apps.length}):\n`;
+        apps.slice(0, 5).forEach(app => {
+          formatted += `  • ${app.name}`;
+          if (app.windowTitle && app.windowTitle !== app.name) {
+            formatted += ` (${app.windowTitle})`;
+          }
+          formatted += '\n';
+        });
+        
+        if (apps.length > 5) {
+          formatted += `  • ...and ${apps.length - 5} more ${category} apps\n`;
+        }
+      }
+    });
+
+    return formatted;
+  }
+
+  generateFallbackSummary(commits, files, events, appCategories, streakData, targetDate) {
     const dateStr = targetDate.toLocaleDateString();
     const fileStats = this.getFileStats(files);
     
@@ -265,6 +301,24 @@ Generate a fun, encouraging daily summary that makes the developer feel good abo
         summary += `  • ...and ${events.length - 5} more events\n`;
       }
       summary += '\n';
+    }
+    
+    // App usage
+    if (appCategories && Object.keys(appCategories).length > 0) {
+      const totalApps = Object.values(appCategories).flat().length;
+      if (totalApps > 0) {
+        summary += `💻 **Applications Used** (${totalApps} app${totalApps > 1 ? 's' : ''} across categories)\n`;
+        Object.entries(appCategories).forEach(([category, apps]) => {
+          if (apps.length > 0) {
+            summary += `  • ${category.charAt(0).toUpperCase() + category.slice(1)}: ${apps.slice(0, 3).map(app => app.name).join(', ')}`;
+            if (apps.length > 3) {
+              summary += ` (+${apps.length - 3} more)`;
+            }
+            summary += '\n';
+          }
+        });
+        summary += '\n';
+      }
     }
     
     // Productivity streak

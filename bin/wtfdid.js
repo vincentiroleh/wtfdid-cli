@@ -7,6 +7,7 @@ const gitSummary = require('../src/gitSummary');
 const fileTracker = require('../src/fileTracker');
 const calendarFetcher = require('../src/calendarFetcher');
 const streakTracker = require('../src/streakTracker');
+const appTracker = require('../src/appTracker');
 const aiSummarizer = require('../src/aiSummarizer');
 const journalWriter = require('../src/journalWriter');
 
@@ -23,6 +24,7 @@ program
   .option('-y, --yesterday', 'Run summary for yesterday')
   .option('-t, --test-q', 'Test Q Developer CLI integration')
   .option('--test-calendar', 'Test Google Calendar integration')
+  .option('--test-apps', 'Test app tracking integration')
   .option('--streak', 'Show productivity streak information')
   .action(async (options) => {
     console.log(chalk.cyan.bold('\n🧠 wtfdid-cli: Let\'s see what you accomplished, boss...\n'));
@@ -37,6 +39,11 @@ program
     
     if (options.testCalendar) {
       await testCalendarIntegration();
+      return;
+    }
+    
+    if (options.testApps) {
+      await testAppTracking();
       return;
     }
     
@@ -67,6 +74,16 @@ program
         spinner3.succeed('📅 No calendar events found (or not connected to Google Calendar)');
       }
       
+      // Track app usage
+      const spinner3b = ora('💻 Scanning your app usage... What have you been up to?').start();
+      const appCategories = await appTracker.getTodaysApps(targetDate);
+      const appStats = appTracker.getAppStats(appCategories);
+      if (appStats.total > 0) {
+        spinner3b.succeed(`💻 Found ${appStats.total} active apps across ${Object.keys(appCategories).filter(cat => appCategories[cat].length > 0).length} categories!`);
+      } else {
+        spinner3b.succeed('💻 No app usage data available (or tracking not supported on this system)');
+      }
+      
       // Update productivity streak
       const spinner4 = ora('🔥 Updating productivity streak...').start();
       const streakData = await streakTracker.updateStreak(commits, files, events, targetDate);
@@ -78,13 +95,14 @@ program
         console.log(chalk.blue('Commits:'), commits);
         console.log(chalk.blue('Files:'), files);
         console.log(chalk.blue('Calendar Events:'), events);
+        console.log(chalk.blue('App Categories:'), appCategories);
         console.log(chalk.blue('Streak Data:'), streakData);
         return;
       }
       
       // Generate AI summary
       const spinner5 = ora('🤖 Asking Claude what you actually accomplished...').start();
-      const summary = await aiSummarizer.generateSummary(commits, files, events, streakData, targetDate);
+      const summary = await aiSummarizer.generateSummary(commits, files, events, appCategories, streakData, targetDate);
       spinner5.succeed('🎉 Summary generated. Spoiler: you\'re amazing.');
       
       console.log(chalk.green.bold('\n📋 Your Daily Summary:\n'));
@@ -173,6 +191,41 @@ async function testCalendarIntegration() {
       console.log(chalk.yellow('\n⚠️  Calendar Issues:\n'));
       console.log(chalk.red(result.error));
       console.log(chalk.cyan('\n💡 Run: npx wtfdid --setup-calendar to authenticate'));
+    }
+  } catch (error) {
+    console.error(chalk.red('💥 Test failed:'), error.message);
+  }
+  
+  console.log(chalk.magenta.bold('\n🚀 Ready to use wtfdid? Try: npx wtfdid\n'));
+}
+
+async function testAppTracking() {
+  console.log(chalk.yellow.bold('🧪 Testing App Tracking Integration...\n'));
+  
+  try {
+    const spinner = ora('💻 Testing app tracking...').start();
+    const result = await appTracker.testAppTracking();
+    
+    if (result.success) {
+      spinner.succeed('✅ App tracking is working!');
+      console.log(chalk.green.bold(`\n🎉 Found ${result.totalApps} active applications`));
+      console.log(chalk.cyan(`📱 Platform: ${result.platform}`));
+      console.log(chalk.cyan(`📊 Categories: ${result.categories.join(', ')}`));
+      
+      if (result.topApps.length > 0) {
+        console.log(chalk.blue('\n💻 Top Apps Currently Running:'));
+        result.topApps.forEach(app => {
+          console.log(chalk.white(`  • ${app}`));
+        });
+      }
+      
+      console.log(chalk.cyan('\n💡 Your wtfdid summaries will include app usage data!'));
+      
+    } else {
+      spinner.fail('❌ App tracking not available');
+      console.log(chalk.yellow('\n⚠️  App Tracking Issues:\n'));
+      console.log(chalk.red(result.error));
+      console.log(chalk.cyan(`\n💡 Platform: ${result.platform} - Some features may be limited`));
     }
   } catch (error) {
     console.error(chalk.red('💥 Test failed:'), error.message);
