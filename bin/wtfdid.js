@@ -27,6 +27,7 @@ program
   .option('--test-apps', 'Test app tracking integration')
   .option('--setup-google', 'Setup Google Calendar integration')
   .option('--config', 'Show current configuration status')
+  .option('--standup', 'Generate standup-ready summary')
   .option('--streak', 'Show productivity streak information')
   .action(async (options) => {
     console.log(chalk.cyan.bold('\n🧠 wtfdid-cli: Let\'s see what you accomplished, boss...\n'));
@@ -59,12 +60,17 @@ program
       return;
     }
     
+    const targetDate = options.yesterday ? getYesterday() : new Date();
+    
+    if (options.standup) {
+      await generateStandupSummary(targetDate, options.save);
+      return;
+    }
+    
     if (options.streak) {
       await showStreakInfo();
       return;
     }
-    
-    const targetDate = options.yesterday ? getYesterday() : new Date();
     
     try {
       // Gather Git commits
@@ -388,6 +394,286 @@ async function setupGoogleCalendar() {
   }
   
   console.log(chalk.magenta.bold('\n🚀 Setup complete! Try: wtfdid\n'));
+}
+
+async function generateStandupSummary(targetDate) {
+  console.log(chalk.cyan.bold('📋 Generating Standup Summary...\n'));
+  
+  try {
+    // Gather all data
+    const spinner1 = ora('🔍 Gathering your accomplishments...').start();
+    const commits = await gitSummary.getTodaysCommits(targetDate);
+    const files = await fileTracker.getTodaysFiles(targetDate);
+    const events = await calendarFetcher.getTodaysEvents(targetDate);
+    const appCategories = await appTracker.getTodaysApps(targetDate);
+    const streakData = await streakTracker.getStreakInfo();
+    spinner1.succeed('✅ Data collected');
+    
+    // Generate standup-specific summary
+    const spinner2 = ora('📝 Creating standup summary...').start();
+    const standupSummary = await aiSummarizer.generateStandupSummary(commits, files, events, appCategories, streakData, targetDate);
+    spinner2.succeed('✅ Standup summary ready');
+    
+    // Display the standup summary
+    console.log(chalk.green.bold('\n🎯 STANDUP SUMMARY\n'));
+    console.log(standupSummary);
+    
+    // Offer to copy to clipboard
+    console.log(chalk.yellow('\n💡 Tip: Copy this summary for your standup meeting!'));
+    console.log(chalk.gray('You can also save it with: wtfdid --standup --save\n'));
+    
+  } catch (error) {
+    console.error(chalk.red('💥 Failed to generate standup summary:'), error.message);
+  }
+}
+
+async function generateStandupContent(commits, files, events, appCategories, streakData, targetDate) {
+  const dateStr = targetDate.toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+  
+  let summary = `📅 **${dateStr} - Daily Standup**\n\n`;
+  
+  // WHAT I DID YESTERDAY/TODAY
+  summary += `## 🎯 What I Accomplished:\n\n`;
+  
+  if (commits.length > 0) {
+    summary += `**Code Changes (${commits.length} commit${commits.length > 1 ? 's' : ''}):**\n`;
+    commits.slice(0, 5).forEach(commit => {
+      // Clean up commit messages for standup
+      const cleanMessage = commit.message
+        .replace(/^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?:\s*/i, '')
+        .replace(/^\w+\s*[-:]\s*/, '')
+        .replace(/^(add|update|fix|remove|implement|create)\s*/i, '')
+        .trim();
+      summary += `  • ${cleanMessage}\n`;
+    });
+    if (commits.length > 5) {
+      summary += `  • ...and ${commits.length - 5} more commits\n`;
+    }
+    summary += '\n';
+  }
+  
+  if (files.length > 0) {
+    const fileStats = getFileTypeStats(files);
+    summary += `**Files Modified:** ${files.length} files (`;
+    summary += Object.entries(fileStats).map(([ext, count]) => `${count} ${ext}`).join(', ');
+    summary += ')\n\n';
+  }
+  
+  // MEETINGS & COLLABORATION
+  if (events && events.length > 0) {
+    summary += `**Meetings & Collaboration:**\n`;
+    events.forEach(event => {
+      const time = event.isAllDay ? 'All day' : 
+        new Date(event.start).toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        });
+      summary += `  • ${time}: ${event.title}`;
+      if (event.attendees > 0) {
+        summary += ` (${event.attendees} attendees)`;
+      }
+      summary += '\n';
+    });
+    summary += '\n';
+  }
+  
+  // TOOLS & FOCUS AREAS
+  if (appCategories && Object.keys(appCategories).length > 0) {
+    const totalApps = Object.values(appCategories).flat().length;
+    if (totalApps > 0) {
+      summary += `**Tools & Focus Areas:**\n`;
+      Object.entries(appCategories).forEach(([category, apps]) => {
+        if (apps.length > 0 && category !== 'other') {
+          const topApps = apps.slice(0, 3).map(app => app.name).join(', ');
+          summary += `  • ${category.charAt(0).toUpperCase() + category.slice(1)}: ${topApps}`;
+          if (apps.length > 3) {
+            summary += ` (+${apps.length - 3} more)`;
+          }
+          summary += '\n';
+        }
+      });
+      summary += '\n';
+    }
+  }
+  
+  // BLOCKERS & CHALLENGES
+  summary += `## 🚧 Blockers/Challenges:\n`;
+  summary += `  • None at the moment\n`;
+  summary += `  • (Update this section as needed)\n\n`;
+  
+  // WHAT'S NEXT
+  summary += `## 🎯 Today's Plan:\n`;
+  summary += `  • Continue working on current features\n`;
+  summary += `  • Address any code review feedback\n`;
+  summary += `  • (Add your specific goals here)\n\n`;
+  
+  // PRODUCTIVITY STREAK (if impressive)
+  if (streakData && streakData.currentStreak >= 3) {
+    const streakEmoji = streakData.currentStreak >= 7 ? '🔥' : '⭐';
+    summary += `## ${streakEmoji} Productivity Streak: ${streakData.currentStreak} days!\n\n`;
+  }
+  
+  summary += `---\n`;
+  summary += `*Generated by wtfdid CLI - Track your daily wins!*`;
+  
+  return summary;
+}
+
+function getFileTypeStats(files) {
+  const stats = {};
+  files.forEach(file => {
+    const ext = file.extension || 'no extension';
+    stats[ext] = (stats[ext] || 0) + 1;
+  });
+  return stats;
+}
+
+async function generateStandupSummary(targetDate, saveToJournal = false) {
+  console.log(chalk.blue.bold('📋 Generating Standup Summary...\n'));
+  
+  try {
+    // Gather all data
+    const spinner1 = ora('Collecting data...').start();
+    const [commits, files, events, appCategories] = await Promise.all([
+      gitSummary.getTodaysCommits(targetDate),
+      fileTracker.getTodaysFiles(targetDate),
+      calendarFetcher.getTodaysEvents(targetDate),
+      appTracker.getTodaysApps(targetDate)
+    ]);
+    
+    const streakData = await streakTracker.updateStreak(commits, files, events, targetDate);
+    spinner1.succeed('Data collected');
+    
+    // Generate standup-specific summary
+    const standupSummary = await generateStandupContent(commits, files, events, appCategories, streakData, targetDate);
+    
+    console.log(chalk.green.bold('\n📊 STANDUP SUMMARY\n'));
+    console.log(standupSummary);
+    
+    // Save to journal if requested
+    if (saveToJournal) {
+      const spinner2 = ora('💾 Saving standup summary to journal...').start();
+      await journalWriter.saveToJournal(`# Standup Summary\n\n${standupSummary}`, targetDate);
+      spinner2.succeed('📖 Standup summary saved to journal');
+    }
+    
+    // Offer to copy to clipboard
+    console.log(chalk.gray('\n💡 Tip: Copy this summary for your standup meeting!'));
+    if (!saveToJournal) {
+      console.log(chalk.yellow('    You can also save it with: wtfdid --standup --save'));
+    }
+    console.log('');
+    
+  } catch (error) {
+    console.error(chalk.red('💥 Failed to generate standup summary:'), error.message);
+  }
+}
+
+async function generateStandupContent(commits, files, events, appCategories, streakData, targetDate) {
+  const dateStr = targetDate.toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+  
+  let summary = `🗓️ **Daily Standup - ${dateStr}**\n\n`;
+  
+  // WHAT I DID YESTERDAY/TODAY
+  summary += `## ✅ What I Accomplished:\n\n`;
+  
+  if (commits.length > 0) {
+    summary += `**Code Changes (${commits.length} commit${commits.length > 1 ? 's' : ''}):**\n`;
+    commits.slice(0, 5).forEach(commit => {
+      // Clean up commit message for standup
+      const cleanMessage = commit.message
+        .replace(/^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?:\s*/i, '')
+        .replace(/🚀|✨|🔧|📝|🐛|💡|🎉|🔥|⚡|🎯/g, '')
+        .trim();
+      summary += `  • ${cleanMessage}\n`;
+    });
+    if (commits.length > 5) {
+      summary += `  • ...and ${commits.length - 5} more commits\n`;
+    }
+    summary += '\n';
+  }
+  
+  if (events && events.length > 0) {
+    summary += `**Meetings & Events (${events.length}):**\n`;
+    events.forEach(event => {
+      const time = event.isAllDay ? 'All day' : 
+        new Date(event.start).toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        });
+      summary += `  • ${time}: ${event.title}\n`;
+    });
+    summary += '\n';
+  }
+  
+  if (files.length > 0) {
+    const fileStats = {};
+    files.forEach(file => {
+      const ext = file.extension || 'config';
+      fileStats[ext] = (fileStats[ext] || 0) + 1;
+    });
+    
+    summary += `**Files Modified:** ${files.length} files (`;
+    summary += Object.entries(fileStats)
+      .map(([ext, count]) => `${count} ${ext}`)
+      .join(', ');
+    summary += ')\n\n';
+  }
+  
+  // WHAT I'M WORKING ON TODAY
+  summary += `## 🎯 Today's Focus:\n`;
+  if (commits.length > 0) {
+    const recentWork = commits[0].message
+      .replace(/^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?:\s*/i, '')
+      .replace(/🚀|✨|🔧|📝|🐛|💡|🎉|🔥|⚡|🎯/g, '')
+      .trim();
+    summary += `  • Continue work on: ${recentWork}\n`;
+  }
+  
+  if (events && events.length > 0) {
+    const upcomingEvents = events.filter(event => new Date(event.start) > new Date());
+    if (upcomingEvents.length > 0) {
+      summary += `  • Upcoming meetings: ${upcomingEvents.length} scheduled\n`;
+    }
+  }
+  
+  summary += `  • Code reviews and testing\n`;
+  summary += `  • Documentation updates\n\n`;
+  
+  // BLOCKERS
+  summary += `## 🚧 Blockers:\n`;
+  summary += `  • None at the moment\n\n`;
+  
+  // PRODUCTIVITY METRICS
+  if (streakData && streakData.currentStreak > 0) {
+    summary += `## 📈 Productivity:\n`;
+    summary += `  • ${streakData.currentStreak} day productivity streak 🔥\n`;
+    if (streakData.currentStreak >= 7) {
+      summary += `  • Maintaining excellent momentum!\n`;
+    }
+    summary += '\n';
+  }
+  
+  // QUICK STATS
+  summary += `---\n`;
+  summary += `**Quick Stats:** ${commits.length} commits • ${files.length} files • ${events?.length || 0} meetings`;
+  if (streakData?.currentStreak > 0) {
+    summary += ` • ${streakData.currentStreak} day streak`;
+  }
+  
+  return summary;
 }
 
 function getYesterday() {

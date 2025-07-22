@@ -39,6 +39,7 @@ npx wtfdid --test-apps       # Test app tracking
 - **Google Calendar Integration**: Includes your meetings and events in the summary
 - **Productivity Streak**: Tracks your daily coding momentum
 - **AI Summary**: Uses Q Developer CLI + Claude to create a witty, encouraging summary
+- **Standup Ready**: Generate professional summaries perfect for daily standup meetings
 - **Journal Integration**: Optionally saves summaries to `~/journals/YYYY-MM-DD.md`
 - **Personality**: Talks like your favorite dev buddy who actually gets it
 
@@ -130,6 +131,7 @@ wtfdid --setup-google
 ```bash
 # Main Commands
 wtfdid                    # Generate today's summary (with everything!)
+wtfdid --standup         # Generate standup-ready summary
 wtfdid --save            # Also save to ~/journals/
 wtfdid --yesterday       # Yesterday's summary
 wtfdid --dry-run         # Show raw data without AI
@@ -237,10 +239,38 @@ This isn't just a demo - it's a **genuine productivity tool** that developers ca
 - **Google Calendar Integration**: Includes meetings and events in your summary
 - **Productivity Streak Tracking**: Gamifies your daily coding habits
 - **Q Developer AI Summaries**: Witty, encouraging summaries powered by Q Developer CLI
+- **Standup Summaries**: Professional, concise summaries perfect for team meetings
 - **Fallback Summaries**: Works even if Q Developer is unavailable
 - **Journal Integration**: Builds a markdown journal over time
 - **Developer Humor**: Because coding should be fun
 - **Cross-Platform**: Works on Windows, Mac, Linux
+
+## 📋 Perfect for Daily Standups
+
+Never struggle with "What did I do yesterday?" again! The `--standup` flag generates professional summaries perfect for team meetings:
+
+```bash
+wtfdid --standup
+```
+
+**Sample Standup Output:**
+```markdown
+## 📅 Daily Standup - Tuesday, July 22, 2025
+
+### 🎯 What I Accomplished:
+• Fixed authentication bug in user login flow
+• Implemented new dashboard components
+• Updated API documentation
+• Attended sprint planning meeting (2h)
+
+### 🎯 What I'm Working On Next:
+• Complete user profile feature
+• Address code review feedback
+• Prepare for client demo
+
+### 🚧 Blockers/Challenges:
+• Waiting for API endpoint from backend team
+```
 
 ## 🤝 Contributing
 
