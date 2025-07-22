@@ -90,28 +90,39 @@ npm link  # Makes 'wtfdid' available globally
 
 Add your calendar events to daily summaries for complete productivity tracking:
 
-1. **Setup Google Cloud Project**:
+#### Quick Setup:
+```bash
+wtfdid --setup-google
+```
+
+#### Manual Setup:
+
+1. **Get Google API Credentials**:
    - Go to [Google Cloud Console](https://console.cloud.google.com/)
    - Create a new project or select existing
    - Enable Google Calendar API
-   - Create OAuth 2.0 credentials (Desktop application)
+   - Create API Key credentials
+   - Copy your API key and calendar ID (usually your email)
 
-2. **Configure Environment**:
-   ```bash
-   export GOOGLE_CLIENT_ID="your-client-id"
-   export GOOGLE_CLIENT_SECRET="your-client-secret"
+2. **Configure Globally (Recommended)**:
+   Create `~/.wtfdid-config.json`:
+   ```json
+   {
+     "googleApiKey": "your-api-key-here",
+     "googleCalendarId": "your-email@gmail.com"
+   }
    ```
-   Or create a `.env` file with these values.
 
-3. **Authenticate**:
+3. **Alternative: Environment Variables**:
+   Add to your shell profile (`~/.bashrc`, `~/.zshrc`):
    ```bash
-   npx wtfdid --setup-calendar
+   export GOOGLE_API_KEY="your-api-key-here"
+   export GOOGLE_CALENDAR_ID="your-email@gmail.com"
    ```
-   This opens your browser for Google OAuth authentication.
 
 4. **Test Integration**:
    ```bash
-   npx wtfdid --test-calendar
+   wtfdid --test-calendar
    ```
 
 ## 📋 Commands
@@ -124,7 +135,7 @@ wtfdid --yesterday       # Yesterday's summary
 wtfdid --dry-run         # Show raw data without AI
 
 # Setup & Testing
-wtfdid --setup-calendar  # Setup Google Calendar OAuth
+wtfdid --setup-google    # Setup Google Calendar integration
 wtfdid --test-calendar   # Test Google Calendar integration
 wtfdid --test-apps       # Test app tracking integration
 wtfdid --test-q          # Test Q Developer CLI integration

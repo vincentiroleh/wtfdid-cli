@@ -1,29 +1,88 @@
 // Load environment variables from .env file
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const chalk = require('chalk');
 
 class CalendarFetcher {
   constructor() {
-    // Simple API key configuration
-    this.apiKey = process.env.GOOGLE_API_KEY;
-    this.calendarId = process.env.GOOGLE_CALENDAR_ID;
+    // Load configuration from multiple sources (priority order)
+    const config = this.loadConfiguration();
+    this.apiKey = config.googleApiKey;
+    this.calendarId = config.googleCalendarId;
+  }
+
+  loadConfiguration() {
+    // Priority order: env vars > global config > built-in shared key
+    let config = {
+      // Built-in shared API key for public calendars (limited usage, rate-limited)
+      googleApiKey: 'AIzaSyDjgMwGILlFrHpDARQyBl-mHLUh0X9Jv7Y',
+      googleCalendarId: 'primary' // Default to user's primary calendar
+    };
+    
+    // 1. Try global config file first
+    try {
+      const globalConfigPath = path.join(os.homedir(), '.wtfdid-config.json');
+      if (fs.existsSync(globalConfigPath)) {
+        const globalConfig = JSON.parse(fs.readFileSync(globalConfigPath, 'utf8'));
+        config = { ...config, ...globalConfig };
+      }
+    } catch (error) {
+      // Ignore global config errors
+    }
+    
+    // 2. Environment variables override global config
+    if (process.env.GOOGLE_API_KEY) {
+      config.googleApiKey = process.env.GOOGLE_API_KEY;
+    }
+    if (process.env.GOOGLE_CALENDAR_ID) {
+      config.googleCalendarId = process.env.GOOGLE_CALENDAR_ID;
+    }
+    
+    return config;
   }
 
   async getTodaysEvents(targetDate = new Date()) {
     try {
-      const apiKey = process.env.GOOGLE_API_KEY;
-      const calendarId = process.env.GOOGLE_CALENDAR_ID;
-      
-      if (!apiKey || !calendarId) {
-        console.log('📅 Google Calendar: Set GOOGLE_API_KEY and GOOGLE_CALENDAR_ID in .env file.');
+      if (!this.apiKey) {
+        if (this.isFirstRun()) {
+          console.log(chalk.yellow('📅 Google Calendar API key not found. Run: wtfdid --setup-google'));
+        }
         return [];
       }
       
-      return await this.getEventsWithApiKey(targetDate, apiKey, calendarId);
+      // If no calendar ID is provided, try to detect the user's email
+      if (!this.calendarId) {
+        this.calendarId = await this.detectUserEmail() || 'primary';
+      }
+      
+      return await this.getEventsWithApiKey(targetDate, this.apiKey, this.calendarId);
 
     } catch (error) {
       console.warn('Calendar fetch failed:', error.message);
       return [];
     }
+  }
+  
+  async detectUserEmail() {
+    try {
+      // Try to detect user's email from git config
+      const { execSync } = require('child_process');
+      const email = execSync('git config --get user.email', { encoding: 'utf8' }).trim();
+      return email || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  isFirstRun() {
+    // Only show setup message once per session
+    if (!this._hasShownSetupMessage) {
+      this._hasShownSetupMessage = true;
+      return true;
+    }
+    return false;
   }
 
 
@@ -124,11 +183,11 @@ class CalendarFetcher {
 
   async testConnection() {
     try {
-      const apiKey = process.env.GOOGLE_API_KEY;
-      const calendarId = process.env.GOOGLE_CALENDAR_ID;
-      
-      if (!apiKey || !calendarId) {
-        return { success: false, error: 'API key or calendar ID not configured' };
+      if (!this.apiKey || !this.calendarId) {
+        return { 
+          success: false, 
+          error: 'Google Calendar not configured. Run: wtfdid --setup-google' 
+        };
       }
 
       // Test by fetching today's events
@@ -137,11 +196,25 @@ class CalendarFetcher {
       return { 
         success: true, 
         calendars: 1,
-        events: events.length
+        events: events.length,
+        calendarId: this.calendarId
       };
     } catch (error) {
       return { success: false, error: error.message };
     }
+  }
+
+  getConfigStatus() {
+    const globalConfigPath = path.join(os.homedir(), '.wtfdid-config.json');
+    const hasGlobalConfig = fs.existsSync(globalConfigPath);
+    const hasEnvVars = !!(process.env.GOOGLE_API_KEY && process.env.GOOGLE_CALENDAR_ID);
+    
+    return {
+      configured: !!(this.apiKey && this.calendarId),
+      globalConfig: hasGlobalConfig,
+      envVars: hasEnvVars,
+      configPath: globalConfigPath
+    };
   }
 }
 

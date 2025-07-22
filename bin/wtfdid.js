@@ -25,6 +25,8 @@ program
   .option('-t, --test-q', 'Test Q Developer CLI integration')
   .option('--test-calendar', 'Test Google Calendar integration')
   .option('--test-apps', 'Test app tracking integration')
+  .option('--setup-google', 'Setup Google Calendar integration')
+  .option('--config', 'Show current configuration status')
   .option('--streak', 'Show productivity streak information')
   .action(async (options) => {
     console.log(chalk.cyan.bold('\n🧠 wtfdid-cli: Let\'s see what you accomplished, boss...\n'));
@@ -44,6 +46,16 @@ program
     
     if (options.testApps) {
       await testAppTracking();
+      return;
+    }
+    
+    if (options.setupGoogle) {
+      await setupGoogleCalendar();
+      return;
+    }
+    
+    if (options.config) {
+      await showConfiguration();
       return;
     }
     
@@ -157,13 +169,26 @@ async function testCalendarIntegration() {
   console.log(chalk.yellow.bold('🧪 Testing Google Calendar Integration...\n'));
   
   try {
+    // Show configuration status
+    const configStatus = calendarFetcher.getConfigStatus();
+    console.log(chalk.cyan('📋 Configuration Status:'));
+    console.log(chalk.white(`  Global config: ${configStatus.globalConfig ? '✅' : '❌'} ${configStatus.configPath}`));
+    console.log(chalk.white(`  Environment vars: ${configStatus.envVars ? '✅' : '❌'}`));
+    console.log(chalk.white(`  Overall configured: ${configStatus.configured ? '✅' : '❌'}\n`));
+    
+    if (!configStatus.configured) {
+      console.log(chalk.red('❌ Google Calendar not configured'));
+      console.log(chalk.yellow('💡 Run: wtfdid --setup-google'));
+      return;
+    }
+    
     const spinner = ora('📅 Testing calendar connection...').start();
     const result = await calendarFetcher.testConnection();
     
     if (result.success) {
       spinner.succeed('✅ Google Calendar is connected!');
-      console.log(chalk.green.bold(`\n🎉 Found access to ${result.calendars} calendar(s)`));
-      console.log(chalk.cyan('\n💡 Your wtfdid summaries will include calendar events!'));
+      console.log(chalk.green.bold(`\n🎉 Connected to calendar: ${result.calendarId}`));
+      console.log(chalk.cyan('💡 Your wtfdid summaries will include calendar events!'));
       
       // Test fetching today's events
       const spinner2 = ora('📋 Fetching today\'s events...').start();
@@ -184,19 +209,21 @@ async function testCalendarIntegration() {
         if (events.length > 3) {
           console.log(chalk.gray(`  • ...and ${events.length - 3} more events`));
         }
+      } else {
+        console.log(chalk.gray('\n📅 No events found for today'));
       }
       
     } else {
-      spinner.fail('❌ Google Calendar not connected');
-      console.log(chalk.yellow('\n⚠️  Calendar Issues:\n'));
+      spinner.fail('❌ Google Calendar connection failed');
+      console.log(chalk.yellow('\n⚠️  Error Details:\n'));
       console.log(chalk.red(result.error));
-      console.log(chalk.cyan('\n💡 Run: npx wtfdid --setup-calendar to authenticate'));
+      console.log(chalk.cyan('\n💡 Try: wtfdid --setup-google to reconfigure'));
     }
   } catch (error) {
     console.error(chalk.red('💥 Test failed:'), error.message);
   }
   
-  console.log(chalk.magenta.bold('\n🚀 Ready to use wtfdid? Try: npx wtfdid\n'));
+  console.log(chalk.magenta.bold('\n🚀 Ready to use wtfdid? Try: wtfdid\n'));
 }
 
 async function testAppTracking() {
@@ -264,6 +291,103 @@ async function showStreakInfo() {
   }
   
   console.log(chalk.magenta.bold('\n🚀 Ready to build your streak? Try: npx wtfdid\n'));
+}
+
+async function setupGoogleCalendar() {
+  const readline = require('readline');
+  const fs = require('fs').promises;
+  const path = require('path');
+  const os = require('os');
+  
+  console.log(chalk.yellow.bold('🔧 Setting up Google Calendar Integration...\n'));
+  
+  console.log(chalk.cyan('📋 First, get your Google API credentials:'));
+  console.log(chalk.white('1. Go to: https://console.cloud.google.com/'));
+  console.log(chalk.white('2. Create/select a project'));
+  console.log(chalk.white('3. Enable Google Calendar API'));
+  console.log(chalk.white('4. Create API Key credentials'));
+  console.log(chalk.white('5. Make sure your calendar is public or shared\n'));
+  
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+  
+  const question = (prompt) => new Promise((resolve) => {
+    rl.question(prompt, resolve);
+  });
+  
+  try {
+    console.log(chalk.green.bold('🔑 Let\'s configure your credentials:\n'));
+    
+    const apiKey = await question(chalk.cyan('Enter your Google API Key: '));
+    if (!apiKey.trim()) {
+      console.log(chalk.red('❌ API Key is required!'));
+      rl.close();
+      return;
+    }
+    
+    const calendarId = await question(chalk.cyan('Enter your Calendar ID (usually your email): '));
+    if (!calendarId.trim()) {
+      console.log(chalk.red('❌ Calendar ID is required!'));
+      rl.close();
+      return;
+    }
+    
+    // Create global config
+    const configPath = path.join(os.homedir(), '.wtfdid-config.json');
+    const config = {
+      googleApiKey: apiKey.trim(),
+      googleCalendarId: calendarId.trim(),
+      setupDate: new Date().toISOString()
+    };
+    
+    await fs.writeFile(configPath, JSON.stringify(config, null, 2));
+    
+    console.log(chalk.green.bold('\n✅ Configuration saved successfully!'));
+    console.log(chalk.gray(`Config file: ${configPath}`));
+    
+    // Test the configuration
+    console.log(chalk.yellow('\n🧪 Testing your configuration...'));
+    const calendarFetcher = require('../src/calendarFetcher');
+    const testResult = await calendarFetcher.testConnection();
+    
+    if (testResult.success) {
+      console.log(chalk.green.bold('🎉 Google Calendar integration is working!'));
+      console.log(chalk.cyan(`Found access to calendar: ${calendarId}`));
+      
+      // Try to fetch today's events
+      const events = await calendarFetcher.getTodaysEvents();
+      console.log(chalk.blue(`📅 Found ${events.length} events for today`));
+      
+      if (events.length > 0) {
+        console.log(chalk.white('\nSample events:'));
+        events.slice(0, 3).forEach(event => {
+          const time = event.isAllDay ? 'All day' : 
+            new Date(event.start).toLocaleTimeString('en-US', { 
+              hour: 'numeric', 
+              minute: '2-digit',
+              hour12: true 
+            });
+          console.log(chalk.gray(`  • ${time}: ${event.title}`));
+        });
+      }
+    } else {
+      console.log(chalk.red.bold('❌ Configuration test failed:'));
+      console.log(chalk.red(testResult.error));
+      console.log(chalk.yellow('\n💡 Common issues:'));
+      console.log(chalk.white('- Make sure your calendar is public or properly shared'));
+      console.log(chalk.white('- Verify your API key has Calendar API access'));
+      console.log(chalk.white('- Check that the Calendar ID is correct'));
+    }
+    
+  } catch (error) {
+    console.log(chalk.red.bold('❌ Setup failed:'), error.message);
+  } finally {
+    rl.close();
+  }
+  
+  console.log(chalk.magenta.bold('\n🚀 Setup complete! Try: wtfdid\n'));
 }
 
 function getYesterday() {
