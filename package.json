@@ -4,7 +4,7 @@
   "description": "A hilarious but genuinely useful CLI that tells devs WTF they did today",
   "main": "bin/wtfdid.js",
   "bin": {
-    "wtfdid": "./bin/wtfdid.js"
+    "wtfdid": "bin/wtfdid.js"
   },
   "scripts": {
     "start": "node bin/wtfdid.js",
@@ -30,7 +30,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vincentiroleh/wtfdid-cli.git"
+    "url": "git+https://github.com/vincentiroleh/wtfdid-cli.git"
   },
   "bugs": {
     "url": "https://github.com/vincentiroleh/wtfdid-cli/issues"
