@@ -235,14 +235,62 @@ This isn't just a demo - it's a **genuine productivity tool** that developers ca
 
 This is built for the AWS Q Developer Challenge - let's make it legendary!
 
-1. Fork it
-2. Create your feature branch
-3. Add some humor and polish
-4. Submit a PR
+1. **Fork the repository**
+2. **Create your feature branch**: `git checkout -b feature/amazing-feature`
+3. **Commit your changes**: `git commit -m 'Add some amazing feature'`
+4. **Push to the branch**: `git push origin feature/amazing-feature`
+5. **Open a Pull Request**
+
+### 💡 Ideas for Contributions:
+- Additional calendar integrations (Outlook, Apple Calendar)
+- More app tracking platforms and categories
+- Enhanced AI prompt engineering
+- Better streak visualization
+- Export formats (PDF, HTML)
+- Team/organization features
+
+## 🐛 Issues & Support
+
+Found a bug or have a feature request? 
+
+1. **Check existing issues** first
+2. **Create a new issue** with:
+   - Clear description of the problem/feature
+   - Steps to reproduce (for bugs)
+   - Your environment (OS, Node version)
+   - Sample output (if applicable)
 
 ## 📝 License
 
-MIT - Build cool stuff with it!
+MIT License - see the [LICENSE](LICENSE) file for details.
+
+This means you can:
+- ✅ Use it commercially
+- ✅ Modify it however you want
+- ✅ Distribute it
+- ✅ Use it privately
+- ✅ Sublicense it
+
+Just keep the copyright notice and license text in any copies.
+
+## 🙏 Acknowledgments
+
+- **AWS Q Developer** for the amazing AI capabilities
+- **Google Calendar API** for calendar integration
+- **All the developers** who will use this to track their daily wins
+- **The open source community** for inspiration and tools
+
+## ⭐ Show Your Support
+
+If this tool helps you track your daily productivity wins, please:
+- ⭐ **Star this repository**
+- 🐦 **Share it on social media**
+- 💬 **Tell your developer friends**
+- 🍕 **Buy me a coffee** (just kidding, star it instead!)
+
+---
+
+**Built with ☕ and a healthy dose of "WTF did I actually accomplish today?" energy**
 
 ---
 

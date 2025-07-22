@@ -18,8 +18,16 @@
     "daily-summary",
     "aws-q-developer"
   ],
-  "author": "Vincent",
+  "author": "Vincent Iroleh <irolehiroleh@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/wtfdid-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/wtfdid-cli/issues"
+  },
+  "homepage": "https://github.com/yourusername/wtfdid-cli#readme",
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
