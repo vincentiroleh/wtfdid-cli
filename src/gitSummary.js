@@ -22,8 +22,8 @@ class GitSummary {
 
       // Get commits from today
       const log = await this.git.log({
-        since: startOfDay.toISOString(),
-        until: endOfDay.toISOString(),
+        '--since': startOfDay.toISOString(),
+        '--until': endOfDay.toISOString(),
         '--all': null
       });
 

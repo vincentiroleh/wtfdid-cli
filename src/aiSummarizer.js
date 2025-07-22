@@ -7,31 +7,32 @@ class AISummarizer {
     this.qConfigPath = path.join(process.cwd(), 'q-agent-config.json');
   }
 
-  async generateSummary(commits, files, targetDate) {
+  async generateSummary(commits, files, events, streakData, targetDate) {
+    // Create Q Developer agent config if it doesn't exist
+    await this.ensureQConfig();
+    
+    const prompt = this.buildPrompt(commits, files, events, streakData, targetDate);
+    
     try {
-      // Create Q Developer agent config if it doesn't exist
-      await this.ensureQConfig();
-      
-      const prompt = this.buildPrompt(commits, files, targetDate);
-      
-      // Use Q Developer CLI to generate summary
+      // Try Q Developer CLI first
       const summary = await this.callQDeveloper(prompt);
-      
-      return summary || this.generateFallbackSummary(commits, files, targetDate);
-      
+      return summary;
     } catch (error) {
-      console.warn('AI summary failed, using fallback:', error.message);
-      return this.generateFallbackSummary(commits, files, targetDate);
+      console.warn('Q Developer failed, using fallback summary:', error.message);
+      // Generate a simple fallback summary
+      return this.generateFallbackSummary(commits, files, events, streakData, targetDate);
     }
   }
 
-  buildPrompt(commits, files, targetDate) {
+  buildPrompt(commits, files, events, streakData, targetDate) {
     const dateStr = targetDate.toLocaleDateString();
     const fileStats = this.getFileStats(files);
+    const calendarStats = this.formatCalendarEvents(events);
+    const streakStats = this.formatStreakData(streakData);
     
-    return `You're a witty but professional productivity assistant. Given the user's commits, files, and activities, summarize their day in a fun and human way.
+    return `You're a witty but professional productivity assistant. Given the user's commits, files, calendar events, productivity streak, and activities, summarize their day in a fun and human way.
 
-Be encouraging and slightly sarcastic if needed. Use relatable developer language. Include bullets and short paragraphs. End with a fun line like "Now go eat. You earned it." or "Well played, Code Wizard."
+Be encouraging and slightly sarcastic if needed. Use relatable developer language. Include bullets and short paragraphs. Acknowledge their productivity streak if it's impressive. End with a fun line like "Now go eat. You earned it." or "Well played, Code Wizard."
 
 Date: ${dateStr}
 
@@ -44,12 +45,19 @@ ${fileStats}
 Recent Files:
 ${files.slice(0, 10).map(f => `- ${f.path} (${f.extension})`).join('\n')}
 
-Generate a fun, encouraging daily summary that makes the developer feel good about their work!`;
+Calendar Events:
+${calendarStats}
+
+Productivity Streak:
+${streakStats}
+
+Generate a fun, encouraging daily summary that makes the developer feel good about their work, acknowledges their streak, and celebrates both their coding AND meeting accomplishments!`;
   }
 
   async callQDeveloper(prompt) {
     return new Promise((resolve, reject) => {
-      const qProcess = spawn('qchat', ['chat', prompt], {
+      // Use Q Developer CLI with correct syntax: --model claude-3.5-sonnet --no-interactive
+      const qProcess = spawn('q', ['chat', '--model', 'claude-3.5-sonnet', '--no-interactive', prompt], {
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
@@ -66,18 +74,90 @@ Generate a fun, encouraging daily summary that makes the developer feel good abo
 
       qProcess.on('close', (code) => {
         if (code === 0 && output.trim()) {
-          resolve(output.trim());
+          // Clean up the output - extract just the AI response
+          const cleanOutput = this.extractQResponse(output);
+          resolve(cleanOutput);
         } else {
-          reject(new Error(`Q Developer failed: ${error || 'Unknown error'}`));
+          reject(new Error(`Q Developer CLI failed (exit code ${code}): ${error || 'Unknown error'}`));
         }
       });
 
-      // Set timeout
-      setTimeout(() => {
-        qProcess.kill();
-        reject(new Error('Q Developer timeout'));
+      qProcess.on('error', (err) => {
+        reject(new Error(`Failed to start Q Developer CLI: ${err.message}`));
+      });
+
+      // Increase timeout to 30 seconds for Q Developer
+      const timeout = setTimeout(() => {
+        qProcess.kill('SIGTERM');
+        reject(new Error('Q Developer CLI timeout - response took too long (30s limit)'));
       }, 30000);
+
+      // Clear timeout if process completes normally
+      qProcess.on('close', () => {
+        clearTimeout(timeout);
+      });
     });
+  }
+
+  extractQResponse(rawOutput) {
+    // Remove ANSI color codes and escape sequences
+    let cleaned = rawOutput.replace(/\x1b\[[0-9;]*[mGKH]/g, '');
+    
+    // Find the actual AI response after the ">" prompt indicator
+    const responseMatch = cleaned.match(/>\s*(.*?)$/s);
+    if (responseMatch) {
+      return responseMatch[1].trim();
+    }
+    
+    // Look for content after the model indicator line
+    const modelMatch = cleaned.match(/🤖.*?claude-3\.5-sonnet\s*\n\n(.*?)$/s);
+    if (modelMatch) {
+      return modelMatch[1].trim();
+    }
+    
+    // Try to find content after the separator line
+    const separatorMatch = cleaned.match(/━+\s*\n🤖.*?\n\n(.*?)$/s);
+    if (separatorMatch) {
+      return separatorMatch[1].trim();
+    }
+    
+    // Split by lines and find the response content
+    const lines = cleaned.split('\n');
+    let responseStarted = false;
+    let responseLines = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      // Skip ASCII art, headers, and UI elements
+      if (line.includes('⢠⣶⣶⣦') || line.includes('╭─') || line.includes('│') || 
+          line.includes('/help') || line.includes('━━━') || 
+          line.includes('Did you know?') || line.trim() === '') {
+        continue;
+      }
+      
+      // Start collecting response after model indicator
+      if (line.includes('🤖') && line.includes('claude-3.5-sonnet')) {
+        responseStarted = true;
+        continue;
+      }
+      
+      // Collect response lines
+      if (responseStarted && line.trim() !== '') {
+        // Skip the ">" prompt line
+        if (line.trim() === '>') {
+          continue;
+        }
+        responseLines.push(line);
+      }
+    }
+    
+    if (responseLines.length > 0) {
+      return responseLines.join('\n').trim();
+    }
+    
+    // Last resort: return cleaned output
+    return cleaned.trim();
   }
 
   async ensureQConfig() {
@@ -87,23 +167,64 @@ Generate a fun, encouraging daily summary that makes the developer feel good abo
       // Create basic Q agent config
       const config = {
         "name": "wtfdid-summarizer",
-        "description": "Daily productivity summary agent",
-        "instructions": "You are a witty productivity assistant that helps developers understand what they accomplished each day. Be encouraging, slightly sarcastic, and use developer-friendly language.",
-        "model": "claude-3-sonnet"
+        "description": "Daily productivity summary agent for AWS Q Developer Challenge",
+        "instructions": "You are a witty productivity assistant that helps developers understand what they accomplished each day. Be encouraging, slightly sarcastic, and use developer-friendly language. Always end with an encouraging line like 'Now go eat. You earned it!' or 'Well played, Code Wizard!'",
+        "model": "claude-3.5-sonnet"
       };
       
       await fs.writeFile(this.qConfigPath, JSON.stringify(config, null, 2));
     }
   }
 
-  generateFallbackSummary(commits, files, targetDate) {
+  async testQDeveloper(testPrompt) {
+    try {
+      const result = await this.callQDeveloper(testPrompt);
+      return {
+        success: true,
+        output: result
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  formatCalendarEvents(events) {
+    if (!events || events.length === 0) {
+      return 'No calendar events today (or calendar not connected).';
+    }
+
+    let formatted = `${events.length} calendar events:\n`;
+    
+    events.forEach(event => {
+      const time = event.isAllDay ? 'All day' : 
+        new Date(event.start).toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        });
+      
+      formatted += `  • ${time}: "${event.title}" (${event.duration})`;
+      if (event.attendees > 0) {
+        formatted += ` - ${event.attendees} attendees`;
+      }
+      formatted += '\n';
+    });
+
+    return formatted;
+  }
+
+  generateFallbackSummary(commits, files, events, streakData, targetDate) {
     const dateStr = targetDate.toLocaleDateString();
     const fileStats = this.getFileStats(files);
     
     let summary = `🗓️ **Daily Summary for ${dateStr}**\n\n`;
     
+    // Git activity
     if (commits.length > 0) {
-      summary += `📝 **Git Activity** (${commits.length} commits)\n`;
+      summary += `📝 **Git Activity** (${commits.length} commit${commits.length > 1 ? 's' : ''})\n`;
       commits.slice(0, 5).forEach(commit => {
         summary += `  • ${commit.hash}: "${commit.message}"\n`;
       });
@@ -111,37 +232,85 @@ Generate a fun, encouraging daily summary that makes the developer feel good abo
         summary += `  • ...and ${commits.length - 5} more commits\n`;
       }
       summary += '\n';
-    } else {
-      summary += `📝 **Git Activity**: No commits today. Sometimes we just think really hard. 🤔\n\n`;
     }
     
+    // File changes
     if (files.length > 0) {
-      summary += `📁 **File Changes** (${files.length} files modified)\n`;
+      summary += `📁 **File Changes** (${files.length} file${files.length > 1 ? 's' : ''} modified)\n`;
       summary += fileStats + '\n\n';
       
-      summary += `**Recent files you touched:**\n`;
+      summary += '**Recent files you touched:**\n';
       files.slice(0, 8).forEach(file => {
         summary += `  • ${file.path}\n`;
       });
       if (files.length > 8) {
         summary += `  • ...and ${files.length - 8} more files\n`;
       }
-    } else {
-      summary += `📁 **File Changes**: No files modified today. Either you're planning something big or you took a well-deserved break! 🏖️\n`;
+      summary += '\n';
     }
     
-    // Add encouraging conclusion
-    const conclusions = [
-      "Now go eat. You earned it, Code Wizard! 🧙‍♂️",
+    // Calendar events
+    if (events && events.length > 0) {
+      summary += `🗓️ **Calendar Events** (${events.length} event${events.length > 1 ? 's' : ''})\n`;
+      events.slice(0, 5).forEach(event => {
+        const time = event.isAllDay ? 'All day' : 
+          new Date(event.start).toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit',
+            hour12: true 
+          });
+        summary += `  • ${time}: "${event.title}" (${event.duration})\n`;
+      });
+      if (events.length > 5) {
+        summary += `  • ...and ${events.length - 5} more events\n`;
+      }
+      summary += '\n';
+    }
+    
+    // Productivity streak
+    if (streakData && streakData.currentStreak > 0) {
+      const streakEmoji = streakData.currentStreak >= 7 ? '🔥' : 
+                         streakData.currentStreak >= 3 ? '⭐' : '💪';
+      summary += `${streakEmoji} **Productivity Streak**: ${streakData.currentStreak} day${streakData.currentStreak > 1 ? 's' : ''}!\n\n`;
+    }
+    
+    // Encouraging message
+    const encouragements = [
       "Well played today, boss. Time to celebrate with your favorite beverage! 🍺",
-      "Another day of making the impossible possible. You're crushing it! 💪",
-      "Progress is progress, no matter how small. Keep being awesome! ⭐",
-      "You beautiful disaster, you actually got stuff done today! 🎉"
+      "Solid work today! You're making progress, one commit at a time. 🚀",
+      "Another productive day in the books. You're building something great! ⭐",
+      "Nice hustle today! Your future self will thank you. 💪",
+      "Good stuff today! Keep the momentum going, Code Wizard! ✨"
     ];
     
-    summary += '\n' + conclusions[Math.floor(Math.random() * conclusions.length)];
+    const randomEncouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
+    summary += randomEncouragement;
     
     return summary;
+  }
+
+  formatStreakData(streakData) {
+    if (!streakData || streakData.currentStreak === 0) {
+      return 'No current productivity streak. Today could be the start of something great!';
+    }
+
+    let formatted = `Current streak: ${streakData.currentStreak} day${streakData.currentStreak > 1 ? 's' : ''}! `;
+    
+    if (streakData.currentStreak >= 7) {
+      formatted += '🔥 On fire!';
+    } else if (streakData.currentStreak >= 3) {
+      formatted += '⭐ Great momentum!';
+    } else {
+      formatted += '💪 Building habits!';
+    }
+
+    if (streakData.longestStreak > streakData.currentStreak) {
+      formatted += ` (Personal best: ${streakData.longestStreak} days)`;
+    }
+
+    formatted += `\nTotal productive days: ${streakData.totalActiveDays}`;
+
+    return formatted;
   }
 
   getFileStats(files) {
