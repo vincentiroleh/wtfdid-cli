@@ -28,12 +28,16 @@ npx wtfdid --dry-run
 # Test integrations
 npx wtfdid --test-q          # Test Q Developer CLI
 npx wtfdid --test-calendar   # Test Google Calendar
+npx wtfdid --test-apps       # Test app tracking
 ```
 
 ## 🎯 What It Does
 
 - **Git Analysis**: Scans today's commits across all branches
 - **File Tracking**: Lists files you modified today (ignores node_modules, .git, etc.)
+- **App Usage Tracking**: Monitors applications you used (VS Code, browsers, terminals, etc.)
+- **Google Calendar Integration**: Includes your meetings and events in the summary
+- **Productivity Streak**: Tracks your daily coding momentum
 - **AI Summary**: Uses Q Developer CLI + Claude to create a witty, encouraging summary
 - **Journal Integration**: Optionally saves summaries to `~/journals/YYYY-MM-DD.md`
 - **Personality**: Talks like your favorite dev buddy who actually gets it
@@ -114,7 +118,7 @@ Add your calendar events to daily summaries for complete productivity tracking:
 
 ```bash
 # Main Commands
-wtfdid                    # Generate today's summary (with calendar events!)
+wtfdid                    # Generate today's summary (with everything!)
 wtfdid --save            # Also save to ~/journals/
 wtfdid --yesterday       # Yesterday's summary
 wtfdid --dry-run         # Show raw data without AI
@@ -122,7 +126,9 @@ wtfdid --dry-run         # Show raw data without AI
 # Setup & Testing
 wtfdid --setup-calendar  # Setup Google Calendar OAuth
 wtfdid --test-calendar   # Test Google Calendar integration
+wtfdid --test-apps       # Test app tracking integration
 wtfdid --test-q          # Test Q Developer CLI integration
+wtfdid --streak          # Show productivity streak info
 ```
 
 ## 🎨 Sample Output
@@ -154,7 +160,17 @@ wtfdid --test-q          # Test Q Developer CLI integration
   • package.json
   • tests/auth.test.js
 
-Well played today, boss. Time to celebrate with your favorite beverage! 🍺
+🗓️ **Calendar Events** (2 events)
+  • 9:00 AM: "Daily Standup" (30m)
+  • 2:00 PM: "Code Review Session" (1h)
+
+💻 **Applications Used** (5 apps across categories)
+  • Development: code, terminal, node
+  • Browsers: chrome, firefox
+
+🔥 **Productivity Streak**: 9 days!
+
+Well played today, boss. You're building something amazing! 🚀
 
 ✨ Now go eat. You earned it, Code Wizard! ✨
 ```
@@ -206,6 +222,9 @@ This isn't just a demo - it's a **genuine productivity tool** that developers ca
 
 - **Smart Git Parsing**: Finds commits from today across all branches
 - **Intelligent File Filtering**: Ignores noise (node_modules, logs, etc.)
+- **Cross-Platform App Tracking**: Monitors VS Code, browsers, terminals, and more
+- **Google Calendar Integration**: Includes meetings and events in your summary
+- **Productivity Streak Tracking**: Gamifies your daily coding habits
 - **Q Developer AI Summaries**: Witty, encouraging summaries powered by Q Developer CLI
 - **Fallback Summaries**: Works even if Q Developer is unavailable
 - **Journal Integration**: Builds a markdown journal over time
