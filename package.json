@@ -1,5 +1,5 @@
 {
-  "name": "wtfdid-cli",
+  "name": "wtfdid",
   "version": "1.0.0",
   "description": "A hilarious but genuinely useful CLI that tells devs WTF they did today",
   "main": "bin/wtfdid.js",
@@ -16,18 +16,26 @@
     "git",
     "developer",
     "daily-summary",
-    "aws-q-developer"
+    "aws-q-developer",
+    "ai",
+    "claude",
+    "calendar",
+    "streak-tracking",
+    "developer-tools",
+    "command-line",
+    "wtf-did-i-do",
+    "productivity-tracker"
   ],
   "author": "Vincent Iroleh <irolehiroleh@gmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/wtfdid-cli.git"
+    "url": "https://github.com/vincentiroleh/wtfdid-cli.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/wtfdid-cli/issues"
+    "url": "https://github.com/vincentiroleh/wtfdid-cli/issues"
   },
-  "homepage": "https://github.com/yourusername/wtfdid-cli#readme",
+  "homepage": "https://github.com/vincentiroleh/wtfdid-cli#readme",
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
